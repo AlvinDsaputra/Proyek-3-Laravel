@@ -3,73 +3,72 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Product;
 
 class CartController extends Controller
 {
+    private array $products = [
+        1 => ['name' => 'Buku Tulis', 'price' => 5000],
+        2 => ['name' => 'Pulpen', 'price' => 3000],
+        3 => ['name' => 'Penggaris', 'price' => 4000],
+    ];
+
     public function index()
     {
-        $cart = session()->get('cart', []);
-        return view('cart.index', compact('cart'));
+        return view('shop');
     }
 
-    public function add($id)
+    public function add(Request $request)
     {
-        $product = Product::findOrFail($id);
-        $cart = session()->get('cart', []);
+        $data = $request->validate([
+            'cart' => ['present', 'array'],
+            'cart.*' => ['integer', 'min:1', 'max:99'],
+            'product_id' => ['required', 'integer'],
+        ]);
 
-        $currentQty = isset($cart[$id]) ? $cart[$id]['qty'] : 0;
+        $cart = $data['cart'];
+        $id = (int) $data['product_id'];
 
-        if ($currentQty + 1 > $product->stok) {
-            return back()->with('error', 'Jumlah beli melebihi stok yang tersedia!');
-        }
+        abort_unless(isset($this->products[$id]), 404);
 
-        if (isset($cart[$id])) {
-            $cart[$id]['qty']++;
-        } else {
-            $cart[$id] = [
-                'nama' => $product->nama_barang,
-                'harga' => $product->harga,
-                'qty' => 1
+        $cart[$id] = min(99, ($cart[$id] ?? 0) + 1);
+
+        return response()->json($this->calculate($cart));
+    }
+
+    public function update(Request $request)
+    {
+        $data = $request->validate([
+            'cart' => ['present', 'array'],
+            'cart.*' => ['integer', 'min:1', 'max:99'],
+        ]);
+
+        return response()->json($this->calculate($data['cart']));
+    }
+
+    private function calculate(array $cart): array
+    {
+        $items = [];
+        $total = 0;
+
+        foreach ($cart as $id => $quantity) {
+            if (!isset($this->products[$id])) {
+                continue;
+            }
+
+            $product = $this->products[$id];
+            $subtotal = $product['price'] * $quantity;
+
+            $items[] = [
+                'id' => (int) $id,
+                'name' => $product['name'],
+                'price' => $product['price'],
+                'quantity' => $quantity,
+                'subtotal' => $subtotal,
             ];
+
+            $total += $subtotal;
         }
 
-        session()->put('cart', $cart);
-        return back()->with('success', 'Barang berhasil ditambahkan ke keranjang!');
-    }
-
-    public function update(Request $request, $id)
-    {
-        $product = Product::findOrFail($id);
-        $cart = session()->get('cart', []);
-
-        if ($request->qty > $product->stok) {
-            return back()->with('error', 'Jumlah melebihi stok tersedia!');
-        }
-
-        if ($request->qty <= 0) {
-            unset($cart[$id]);
-        } else {
-            $cart[$id]['qty'] = $request->qty;
-        }
-
-        session()->put('cart', $cart);
-        return back()->with('success', 'Keranjang diperbarui!');
-    }
-
-    public function remove($id)
-    {
-        $cart = session()->get('cart', []);
-        if (isset($cart[$id])) {
-            unset($cart[$id]);
-            session()->put('cart', $cart);
-        }
-        return back()->with('success', 'Barang dihapus dari keranjang!');
-    }
-
-    public function clear()
-    {
-        session()->forget('cart');
-        return back()->with('success', 'Keranjang dikosongkan!');
+        return ['items' => $items, 'total' => $total];
     }
 }
