@@ -20,8 +20,8 @@
         </div>
         <hr>
         <p><strong>Selamat datang, {{ Auth::user()->nama_lengkap }}!</strong></p>
-        <p>Halaman ini hanya bisa dibuka setelah login.</p>
         <p>Username: {{ Auth::user()->username }}</p>
+        <p>Role: <strong>{{ Auth::user()->role }}</strong></p>
     </div>
 </body>
 </html>
